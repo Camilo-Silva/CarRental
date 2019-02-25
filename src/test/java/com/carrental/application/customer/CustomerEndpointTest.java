@@ -1,35 +1,92 @@
 package com.carrental.application.customer;
 
-import org.assertj.core.api.Assertions;
-import org.h2.value.DataType;
+import com.carrental.application.Application;
+
+import static org.hamcrest.Matchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.util.NestedServletException;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = Application.class)
 public class CustomerEndpointTest {
-    @Autowired
-    private TestRestTemplate restTemplate;
-    
-    @LocalServerPort
-    private int port;
+    private MockMvc mockMvc;
 
-    @MockBean
+    @Autowired
+    private CustomerController controller;
+
+    @Autowired
     private CustomerRepository repository;
 
-    @Test
-    public void listCustomersWhenEmptyShouldReturnError() {
-        System.out.println(port);
-        ResponseEntity<String> response = restTemplate.getForEntity("/apis/customers/2", String.class);
+    @Before
+    public void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
 
-        Assertions.assertThat(response.getStatusCodeValue()).isEqualTo(500);
+    @Test
+	public void contextLoads() {
+	}
+
+    @Test
+    public void listCustomersWhenEmptyShouldReturnEmptyArray() throws Exception {
+        mockMvc
+            .perform(MockMvcRequestBuilders.get("/apis/customers/"))
+            .andExpect(MockMvcResultMatchers.status().isOk())
+            .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+	@Test(expected = NestedServletException.class)
+    public void retriveNonExistingCustomerShouldReturnError() throws Exception {
+        mockMvc
+            .perform(MockMvcRequestBuilders.get("/apis/customers/2"))
+            .andExpect(MockMvcResultMatchers.status().isOk());
+    }
+
+    @Test
+    public void createCustomerShouldReturnStatus200() throws Exception {
+        String mockJson = "{\"firstName\": \"John\", \"lastName\": \"Doe\"}";
+        mockMvc
+            .perform(MockMvcRequestBuilders
+                .post("/apis/customers/")
+                .accept(MediaType.APPLICATION_JSON)
+                .content(mockJson)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(MockMvcResultMatchers.status().isOk());
+    }
+
+    @Test
+    public void updateCustomerShouldReturnStatus200() throws Exception {
+        String mockJson = "{\"firstName\": \"Jhonny\", \"lastName\": \"Doe\"}";
+        Customer savedCustomer = (Customer) repository.save(new Customer("John", "Doe"));
+        mockMvc
+            .perform(MockMvcRequestBuilders
+                .put("/apis/customers/" + savedCustomer.getId())
+                .accept(MediaType.APPLICATION_JSON)
+                .content(mockJson)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(MockMvcResultMatchers.status().isOk());
+    }
+
+    @Test(expected = NestedServletException.class)
+    public void updateNonExistingCustomerShouldReturnException() throws Exception {
+        String mockJson = "{\"firstName\": \"Jhonny\", \"lastName\": \"Doe\"}";
+        mockMvc
+            .perform(MockMvcRequestBuilders
+                .put("/apis/customers/9999")
+                .accept(MediaType.APPLICATION_JSON)
+                .content(mockJson)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(MockMvcResultMatchers.status().isOk());
     }
 }
